@@ -1,0 +1,6 @@
+pydantic
+typing
+openai
+requests
+transformers
+torch
