@@ -17,17 +17,13 @@
 
 ## needs subscription to OpenAI to run
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from structures import Chatbot
 
 model_name = "facebook/opt-125m"  # Smaller model for CPU efficiency
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
+chat = Chatbot(model_name)
 
-def generate_response(prompt):
-    inputs = tokenizer(prompt, return_tensors="pt")
-    output = model.generate(**inputs, max_length=100)
-    return tokenizer.decode(output[0], skip_special_tokens=True)
+print(chat.generate_response("Hello, how are you?"))
 
-print(generate_response("who are you?"))
-print(generate_response("what is the meaning of life?"))
-print(generate_response("what is the weather like in San Francisco?"))
+# Define how the output should look like
+
+# print(chat.generate_response_with_structure("what is the weather like in New York?"))
