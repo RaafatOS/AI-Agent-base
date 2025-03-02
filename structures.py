@@ -7,8 +7,9 @@ import os
 from pydantic import BaseModel
 from typing import List, Optional
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from mistralai import Mistral
+from mistralai import Field, Mistral
 import dotenv
+from utils import get_weather_data
 
 class weatherStructure(BaseModel):
     """This class defines the format in which the response from the LLM is to be
@@ -17,6 +18,14 @@ class weatherStructure(BaseModel):
     latitude: float
     date: str
     name: str
+
+class WeatherResponse(BaseModel):
+    temperature: float = Field(
+        description="The current temperature in celsius for the given location."
+    )
+    response: str = Field(
+        description="A natural language response to the user's question."
+    )
 
 class bookStructure(BaseModel):
     """This class defines the format in which the response from the LLM is to be
@@ -109,3 +118,62 @@ class MistralAgent:
             temperature=0
         )
         return chat_response.choices[0].message.content
+    
+    def generate_weather(self, prompt, structure):
+        """This function makes a request from Mistral API to get the weather data
+        from the weatherapi API."""
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather_data",
+                    "description": "Get current temperature for provided coordinates in celsius.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "latitude": {"type": "number"},
+                            "longitude": {"type": "number"},
+                        },
+                        "required": ["name"],
+                        "additionalProperties": False,
+                    },
+                    "strict": True,
+                },
+            }
+        ]
+
+        system_prompt = "You are a helpful weather assistant."
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+
+        chat_response = self.client.chat.complete(
+            model=self.model_name,
+            messages=messages,
+            tools=tools,
+        )
+
+        chat_response.model_dump()
+
+        for tool_call in chat_response.choices[0].message.tool_calls:
+            name = tool_call.function.name
+            args = json.loads(tool_call.function.arguments)
+            if name == "get_weather_data":
+                result = get_weather_data(args["name"], args["longitude"], args["latitude"])
+            messages.append({
+                "role": "user", "tool_call_id": tool_call.id,
+                "content": json.dumps(result)
+                })
+
+        response = self.client.chat.parse(
+            model=self.model_name,
+            messages=messages,
+            response_format=WeatherResponse,
+            max_tokens=256,
+            temperature=0
+        )
+
+        return response.choices[0].message.content
+
